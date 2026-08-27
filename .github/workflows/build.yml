@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]   # macOS убран
         build-type: [Release, Debug]
 
     steps:
@@ -23,10 +23,6 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential cmake
-
-    - name: Install dependencies on macOS
-      if: runner.os == 'macOS'
-      run: brew install cmake
 
     # Кэширование vcpkg
     - name: Cache vcpkg
@@ -46,28 +42,28 @@ jobs:
       if: steps.cache-vcpkg.outputs.cache-hit != 'true'
       run: git clone https://github.com/Microsoft/vcpkg.git ./vcpkg
 
-    # Bootstrap для Windows – используем обратную косую черту
+    # Bootstrap для Windows
     - name: Bootstrap vcpkg (Windows)
       if: runner.os == 'Windows'
       run: vcpkg\bootstrap-vcpkg.bat
       shell: cmd
 
-    # Bootstrap для Unix
-    - name: Bootstrap vcpkg (Unix)
-      if: runner.os != 'Windows'
+    # Bootstrap для Linux
+    - name: Bootstrap vcpkg (Linux)
+      if: runner.os == 'Linux'
       run: ./vcpkg/bootstrap-vcpkg.sh
       shell: bash
 
-    # Установка зависимостей через vcpkg (Windows)
-    - name: Install dependencies with vcpkg (Windows)
+    # Установка зависимостей (Windows)
+    - name: Install dependencies (Windows)
       if: runner.os == 'Windows'
       run: vcpkg\vcpkg.exe install --triplet x64-windows
       shell: cmd
 
-    # Установка зависимостей через vcpkg (Unix)
-    - name: Install dependencies with vcpkg (Unix)
-      if: runner.os != 'Windows'
-      run: ./vcpkg/vcpkg install --triplet ${{ runner.os == 'macOS' && 'x64-osx' || 'x64-linux' }}
+    # Установка зависимостей (Linux)
+    - name: Install dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: ./vcpkg/vcpkg install --triplet x64-linux
       shell: bash
 
     # Конфигурация и сборка (Windows)
@@ -80,13 +76,13 @@ jobs:
         cmake --build . --config ${{ matrix.build-type }} --parallel 2
       shell: cmd
 
-    # Конфигурация и сборка (Unix)
-    - name: Configure and Build (Unix)
-      if: runner.os != 'Windows'
+    # Конфигурация и сборка (Linux)
+    - name: Configure and Build (Linux)
+      if: runner.os == 'Linux'
       run: |
         mkdir -p build
         cd build
-        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=${{ runner.os == 'macOS' && 'x64-osx' || 'x64-linux' }}
+        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-linux
         cmake --build . --config ${{ matrix.build-type }} --parallel 2
       shell: bash
 
@@ -96,8 +92,23 @@ jobs:
       run: dir build\${{ matrix.build-type }}\*.exe
       shell: cmd
 
-    # Проверка для Unix
-    - name: Test executable exists (Unix)
-      if: runner.os != 'Windows'
-      run: ls -la build/bin/ || ls -la build/
+    # Проверка для Linux
+    - name: Test executable exists (Linux)
+      if: runner.os == 'Linux'
+      run: ls -la build/structurepad || ls -la build/
       shell: bash
+
+    # --- Загрузка артефактов ---
+    - name: Upload artifacts (Windows)
+      if: runner.os == 'Windows'
+      uses: actions/upload-artifact@v4
+      with:
+        name: structurepad-windows-${{ matrix.build-type }}
+        path: build\${{ matrix.build-type }}\structurepad.exe
+
+    - name: Upload artifacts (Linux)
+      if: runner.os == 'Linux'
+      uses: actions/upload-artifact@v4
+      with:
+        name: structurepad-linux-${{ matrix.build-type }}
+        path: build/structurepad
