@@ -1,8 +1,8 @@
 {
   "name": "structurepad",
   "version": "0.1.0",
-  "description": "A base project for PDCurses with CMake, vcpkg, and GitHub Actions CI/CD",
+  "description": "A base project for FTXUI with CMake, vcpkg, and GitHub Actions CI/CD",
   "dependencies": [
-    "pdcurses"
+    "ftxui"
   ]
 }
