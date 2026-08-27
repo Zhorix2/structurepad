@@ -16,7 +16,6 @@ int main() {
 
     // Создаём опции горизонтального меню и включаем анимацию
     auto option = MenuOption::Horizontal();
-    option.animation = true;   // плавное перемещение выделения
 
     // Создаём компонент меню
     auto menu = Menu(&entries, &selected, option);
@@ -24,8 +23,6 @@ int main() {
     // Отрисовщик, который оборачивает меню и добавляет заголовок
     auto renderer = Renderer(menu, [&] {
         return vbox({
-            text("Горизонтальное меню:") | bold,
-            separator(),
             menu->Render() | border,   // рендерим само меню с рамкой
         });
     });
