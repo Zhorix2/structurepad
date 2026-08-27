@@ -22,24 +22,31 @@ jobs:
       uses: lukka/run-vcpkg@v11
       with:
         vcpkgDirectory: '${{ runner.workspace }}/vcpkg'
-        vcpkgGitCommitId: '2024.02.14'
-        appendedCacheKey: ${{ hashFiles( '**/vcpkg.json' ) }}
-        additionalCachedPaths: ${{ env.buildDir }}/vcpkg_installed
+        vcpkgGitCommitId: 'c8696fbdd5fca8e3f762233bda7312ec386a9bef'
+        runVcpkgInstall: true
     
     - name: Configure and Build (Windows)
       if: runner.os == 'Windows'
       run: |
         mkdir build
         cd build
-        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_TOOLCHAIN_FILE="${{ runner.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_TOOLCHAIN_FILE="${{ runner.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows
         cmake --build . --config ${{ matrix.build-type }}
     
-    - name: Configure and Build (Unix)
-      if: runner.os != 'Windows'
+    - name: Configure and Build (Linux)
+      if: runner.os == 'Linux'
       run: |
         mkdir build
         cd build
-        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_TOOLCHAIN_FILE="${{ runner.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_TOOLCHAIN_FILE="${{ runner.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-linux
+        cmake --build . --config ${{ matrix.build-type }}
+    
+    - name: Configure and Build (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_TOOLCHAIN_FILE="${{ runner.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-osx
         cmake --build . --config ${{ matrix.build-type }}
     
     - name: Test executable exists
