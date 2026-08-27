@@ -18,35 +18,45 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    - name: Install dependencies on Linux
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential
+    
+    - name: Install dependencies on macOS
+      if: runner.os == 'macOS'
+      run: |
+        brew install cmake
+    
     - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11
-      with:
-        vcpkgDirectory: '${{ runner.workspace }}/vcpkg'
-        vcpkgGitCommitId: 'c8696fbdd5fca8e3f762233bda7312ec386a9bef'
-        runVcpkgInstall: true
+      run: |
+        git clone https://github.com/Microsoft/vcpkg.git vcpkg-repo
+        cd vcpkg-repo
+        git checkout c8696fbdd5fca8e3f762233bda7312ec386a9bef
+    
+    - name: Bootstrap vcpkg (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: ./vcpkg-repo/bootstrap-vcpkg.sh
+    
+    - name: Bootstrap vcpkg (Windows)
+      if: runner.os == 'Windows'
+      run: .\vcpkg-repo\bootstrap-vcpkg.bat
     
     - name: Configure and Build (Windows)
       if: runner.os == 'Windows'
       run: |
         mkdir build
         cd build
-        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_TOOLCHAIN_FILE="${{ runner.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows
+        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg-repo/scripts/buildsystems/vcpkg.cmake"
         cmake --build . --config ${{ matrix.build-type }}
     
-    - name: Configure and Build (Linux)
-      if: runner.os == 'Linux'
+    - name: Configure and Build (Unix)
+      if: runner.os != 'Windows'
       run: |
         mkdir build
         cd build
-        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_TOOLCHAIN_FILE="${{ runner.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-linux
-        cmake --build . --config ${{ matrix.build-type }}
-    
-    - name: Configure and Build (macOS)
-      if: runner.os == 'macOS'
-      run: |
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_TOOLCHAIN_FILE="${{ runner.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-osx
+        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg-repo/scripts/buildsystems/vcpkg.cmake"
         cmake --build . --config ${{ matrix.build-type }}
     
     - name: Test executable exists
