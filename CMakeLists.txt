@@ -4,16 +4,16 @@ project(structurepad)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Find PDCurses package
-find_package(pdcurses CONFIG REQUIRED)
+# Find FTXUI package
+find_package(ftxui CONFIG REQUIRED)
 
 # Add executable
 add_executable(structurepad 
     src/main.cpp
 )
 
-# Link PDCurses library
-target_link_libraries(structurepad PRIVATE pdcurses::pdcurses)
+# Link FTXUI library
+target_link_libraries(structurepad PRIVATE ftxui::screen ftxui::dom ftxui::component)
 
 # Include directories
 target_include_directories(structurepad PRIVATE ${CMAKE_SOURCE_DIR}/include)
