@@ -12,18 +12,20 @@ int main() {
         separator(),
         text("Built with FTXUI - Modern C++ terminal UI library"),
         separator(),
-        hbox({
+        hbox(Elements{
             text("► ") | color(Color::Green),
             text("Press Ctrl+C to exit")
         }),
-        gap(1),
-        hbox({
-            box(vbox({
+        filler(),  // instead of gap(1) — fills remaining space, but if we want fixed 1 line maybe use size(HEIGHT, EQUAL, 1)
+        // Alternatively, use text("") to add a blank line:
+        // text(""),
+        hbox(Elements{
+            vbox({
                 text("Features:"),
                 text("✓ Cross-platform"),
                 text("✓ Modern C++17"),
                 text("✓ Responsive UI")
-            })) | border
+            }) | border
         })
     });
 
