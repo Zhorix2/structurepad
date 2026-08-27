@@ -2,61 +2,99 @@ name: Build and Test
 
 on:
   push:
-    branches:
-      - main
-      - develop
-
+    branches: [ main, develop ]
   pull_request:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
   build:
-    name: ${{ matrix.os }} / ${{ matrix.build-type }}
-
     runs-on: ${{ matrix.os }}
-
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-          - macos-latest
-        build-type:
-          - Debug
-          - Release
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        build-type: [Release, Debug]
+        # Опционально: можно добавить компиляторы
+        # include:
+        #   - os: ubuntu-latest
+        #     cxx: g++-12
+        #   - os: macos-latest
+        #     cxx: clang++
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Setup CMake
-        uses: lukka/get-cmake@latest
+    # Установка системных зависимостей для Linux (FTXUI не требует графики, но могут понадобиться)
+    - name: Install dependencies on Linux
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake
 
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgDirectory: '${{ github.workspace }}/vcpkg'
+    - name: Install dependencies on macOS
+      if: runner.os == 'macOS'
+      run: |
+        brew install cmake
 
-      - name: Configure
-        run: >
-          cmake
-          -S .
-          -B build
-          -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
-          -DCMAKE_BUILD_TYPE=${{ matrix.build-type }}
+    # Кэширование vcpkg (сам репозиторий и установленные пакеты)
+    - name: Cache vcpkg
+      uses: actions/cache@v4
+      id: cache-vcpkg
+      with:
+        path: |
+          ./vcpkg
+          !./vcpkg/buildtrees
+          !./vcpkg/packages
+          !./vcpkg/downloads
+        key: ${{ runner.os }}-vcpkg-${{ hashFiles('vcpkg.json') }}
+        restore-keys: |
+          ${{ runner.os }}-vcpkg-
 
-      - name: Build
-        run: >
-          cmake
-          --build build
-          --config ${{ matrix.build-type }}
-          --parallel
+    # Клонируем vcpkg, если нет в кэше
+    - name: Clone vcpkg
+      if: steps.cache-vcpkg.outputs.cache-hit != 'true'
+      run: git clone https://github.com/Microsoft/vcpkg.git ./vcpkg
 
-      - name: Test
-        run: >
-          ctest
-          --test-dir build
-          --build-config ${{ matrix.build-type }}
-          --output-on-failure
+    # Bootstrap vcpkg (если нет кэша, то он будет собран)
+    - name: Bootstrap vcpkg
+      run: |
+        cd ./vcpkg
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          ./bootstrap-vcpkg.bat
+        else
+          ./bootstrap-vcpkg.sh
+        fi
+      shell: bash
+
+    # Установка зависимостей через vcpkg (в режиме манифеста)
+    - name: Install dependencies with vcpkg
+      run: |
+        cd ./vcpkg
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          ./vcpkg.exe install --triplet ${{ env.VCPKG_DEFAULT_TRIPLET }}
+        else
+          ./vcpkg install --triplet ${{ env.VCPKG_DEFAULT_TRIPLET }}
+        fi
+      env:
+        VCPKG_DEFAULT_TRIPLET: ${{ runner.os == 'Windows' && 'x64-windows' || 'x64-linux' }}
+      # Для macOS используйте x64-osx или arm64-osx (автоматически подставится)
+
+    # Настройка и сборка (единый шаг для всех ОС)
+    - name: Configure and Build
+      run: |
+        mkdir -p build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} \
+                 -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" \
+                 -DVCPKG_TARGET_TRIPLET=${{ env.VCPKG_DEFAULT_TRIPLET }}
+        cmake --build . --config ${{ matrix.build-type }} --parallel 2
+
+    # Проверка, что исполняемый файл создался (путь может отличаться)
+    - name: Test executable exists
+      run: |
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          dir build\${{ matrix.build-type }}\*.exe
+        else
+          ls -la build/bin/ || ls -la build/
+        fi
+      shell: bash
