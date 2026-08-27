@@ -14,17 +14,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         build-type: [Release, Debug]
-        # Опционально: можно добавить компиляторы
-        # include:
-        #   - os: ubuntu-latest
-        #     cxx: g++-12
-        #   - os: macos-latest
-        #     cxx: clang++
 
     steps:
     - uses: actions/checkout@v4
 
-    # Установка системных зависимостей для Linux (FTXUI не требует графики, но могут понадобиться)
     - name: Install dependencies on Linux
       if: runner.os == 'Linux'
       run: |
@@ -33,8 +26,7 @@ jobs:
 
     - name: Install dependencies on macOS
       if: runner.os == 'macOS'
-      run: |
-        brew install cmake
+      run: brew install cmake
 
     # Кэширование vcpkg (сам репозиторий и установленные пакеты)
     - name: Cache vcpkg
@@ -50,51 +42,62 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-vcpkg-
 
-    # Клонируем vcpkg, если нет в кэше
     - name: Clone vcpkg
       if: steps.cache-vcpkg.outputs.cache-hit != 'true'
       run: git clone https://github.com/Microsoft/vcpkg.git ./vcpkg
 
-    # Bootstrap vcpkg (если нет кэша, то он будет собран)
-    - name: Bootstrap vcpkg
-      run: |
-        cd ./vcpkg
-        if [ "${{ runner.os }}" = "Windows" ]; then
-          ./bootstrap-vcpkg.bat
-        else
-          ./bootstrap-vcpkg.sh
-        fi
+    # Bootstrap для Windows (cmd)
+    - name: Bootstrap vcpkg (Windows)
+      if: runner.os == 'Windows'
+      run: ./vcpkg/bootstrap-vcpkg.bat
+      shell: cmd
+
+    # Bootstrap для Linux/macOS (bash)
+    - name: Bootstrap vcpkg (Unix)
+      if: runner.os != 'Windows'
+      run: ./vcpkg/bootstrap-vcpkg.sh
       shell: bash
 
-    # Установка зависимостей через vcpkg (в режиме манифеста)
-    - name: Install dependencies with vcpkg
-      run: |
-        cd ./vcpkg
-        if [ "${{ runner.os }}" = "Windows" ]; then
-          ./vcpkg.exe install --triplet ${{ env.VCPKG_DEFAULT_TRIPLET }}
-        else
-          ./vcpkg install --triplet ${{ env.VCPKG_DEFAULT_TRIPLET }}
-        fi
-      env:
-        VCPKG_DEFAULT_TRIPLET: ${{ runner.os == 'Windows' && 'x64-windows' || 'x64-linux' }}
-      # Для macOS используйте x64-osx или arm64-osx (автоматически подставится)
+    # Установка зависимостей через vcpkg (Windows)
+    - name: Install dependencies with vcpkg (Windows)
+      if: runner.os == 'Windows'
+      run: ./vcpkg/vcpkg.exe install --triplet x64-windows
+      shell: cmd
 
-    # Настройка и сборка (единый шаг для всех ОС)
-    - name: Configure and Build
+    # Установка зависимостей через vcpkg (Unix)
+    - name: Install dependencies with vcpkg (Unix)
+      if: runner.os != 'Windows'
+      run: ./vcpkg/vcpkg install --triplet ${{ runner.os == 'macOS' && 'x64-osx' || 'x64-linux' }}
+      shell: bash
+
+    # Конфигурация и сборка (Windows)
+    - name: Configure and Build (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows
+        cmake --build . --config ${{ matrix.build-type }} --parallel 2
+      shell: cmd
+
+    # Конфигурация и сборка (Unix)
+    - name: Configure and Build (Unix)
+      if: runner.os != 'Windows'
       run: |
         mkdir -p build
         cd build
-        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} \
-                 -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" \
-                 -DVCPKG_TARGET_TRIPLET=${{ env.VCPKG_DEFAULT_TRIPLET }}
+        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=${{ runner.os == 'macOS' && 'x64-osx' || 'x64-linux' }}
         cmake --build . --config ${{ matrix.build-type }} --parallel 2
+      shell: bash
 
-    # Проверка, что исполняемый файл создался (путь может отличаться)
-    - name: Test executable exists
-      run: |
-        if [ "${{ runner.os }}" = "Windows" ]; then
-          dir build\${{ matrix.build-type }}\*.exe
-        else
-          ls -la build/bin/ || ls -la build/
-        fi
+    # Проверка, что исполняемый файл создался (Windows)
+    - name: Test executable exists (Windows)
+      if: runner.os == 'Windows'
+      run: dir build\\${{ matrix.build-type }}\\*.exe
+      shell: cmd
+
+    # Проверка для Unix
+    - name: Test executable exists (Unix)
+      if: runner.os != 'Windows'
+      run: ls -la build/bin/ || ls -la build/
       shell: bash
