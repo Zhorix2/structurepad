@@ -1,0 +1,27 @@
+# Build directories
+build/
+cmake-build-debug/
+cmake-build-release/
+dist/
+out/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Dependencies
+vcpkg/
+vcpkg_installed/
+conan/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Executables
+*.exe
+*.out
+structurepad
