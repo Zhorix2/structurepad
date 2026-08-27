@@ -28,7 +28,7 @@ jobs:
       if: runner.os == 'macOS'
       run: brew install cmake
 
-    # Кэширование vcpkg (сам репозиторий и установленные пакеты)
+    # Кэширование vcpkg
     - name: Cache vcpkg
       uses: actions/cache@v4
       id: cache-vcpkg
@@ -46,13 +46,13 @@ jobs:
       if: steps.cache-vcpkg.outputs.cache-hit != 'true'
       run: git clone https://github.com/Microsoft/vcpkg.git ./vcpkg
 
-    # Bootstrap для Windows (cmd)
+    # Bootstrap для Windows – используем обратную косую черту
     - name: Bootstrap vcpkg (Windows)
       if: runner.os == 'Windows'
-      run: ./vcpkg/bootstrap-vcpkg.bat
+      run: vcpkg\bootstrap-vcpkg.bat
       shell: cmd
 
-    # Bootstrap для Linux/macOS (bash)
+    # Bootstrap для Unix
     - name: Bootstrap vcpkg (Unix)
       if: runner.os != 'Windows'
       run: ./vcpkg/bootstrap-vcpkg.sh
@@ -61,7 +61,7 @@ jobs:
     # Установка зависимостей через vcpkg (Windows)
     - name: Install dependencies with vcpkg (Windows)
       if: runner.os == 'Windows'
-      run: ./vcpkg/vcpkg.exe install --triplet x64-windows
+      run: vcpkg\vcpkg.exe install --triplet x64-windows
       shell: cmd
 
     # Установка зависимостей через vcpkg (Unix)
@@ -76,7 +76,7 @@ jobs:
       run: |
         mkdir build
         cd build
-        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows
+        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows
         cmake --build . --config ${{ matrix.build-type }} --parallel 2
       shell: cmd
 
@@ -90,10 +90,10 @@ jobs:
         cmake --build . --config ${{ matrix.build-type }} --parallel 2
       shell: bash
 
-    # Проверка, что исполняемый файл создался (Windows)
+    # Проверка существования исполняемого файла (Windows)
     - name: Test executable exists (Windows)
       if: runner.os == 'Windows'
-      run: dir build\\${{ matrix.build-type }}\\*.exe
+      run: dir build\${{ matrix.build-type }}\*.exe
       shell: cmd
 
     # Проверка для Unix
