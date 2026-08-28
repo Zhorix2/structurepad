@@ -13,7 +13,7 @@
 using namespace std;
 namespace fs = std::filesystem;
 
-// ---- Утилиты ----
+// ---- Вспомогательные функции ----
 void refresh_file_list(const string& dir,
                        vector<string>& file_list,
                        string& current_dir) {
@@ -72,12 +72,13 @@ int main() {
     string filename;
     bool is_modified = false;
 
-    // ---- Компоненты ----
+    // ---- Главное меню (горизонтальное) ----
     auto main_menu = Menu(&entries, &selected, MenuOption::Horizontal());
 
-    auto file_menu = Menu(&file_list, &file_browser_selected);
-    // Исправление 1: используем метод OnChange() вместо присваивания поля
-    file_menu->OnChange() = [&] {
+    // ---- Файловое меню (браузер) ----
+    MenuOption file_menu_option;
+    // Устанавливаем обработчик изменения выбора
+    file_menu_option.on_change = [&] {
         if (file_browser_selected < 0 || file_browser_selected >= file_list.size())
             return;
         string selected_item = file_list[file_browser_selected];
@@ -89,23 +90,27 @@ int main() {
             return;
         }
         string full_path = current_dir + "/" + selected_item;
-        if (selected_item.back() == '/') {
+        if (selected_item.back() == '/') {  // папка
             current_dir = full_path;
             refresh_file_list(current_dir, file_list, current_dir);
             file_browser_selected = 0;
-        } else {
+        } else {  // файл
             load_file(full_path, file_content, saved_content, filename);
             show_file_browser = false;
             is_modified = false;
         }
     };
 
+    auto file_menu = Menu(&file_list, &file_browser_selected, file_menu_option);
+
+    // ---- Контейнер всех активных компонентов ----
     auto container = Container::Vertical({main_menu, file_menu});
 
     // ---- Рендерер ----
     auto renderer = Renderer(container, [&] {
         Elements children;
 
+        // Заголовок
         string title = "Файл: " + (filename.empty() ? "(не открыт)" : filename);
         if (is_modified) title += " *";
         children.push_back(text(title) | bold | color(Color::Cyan));
@@ -125,9 +130,9 @@ int main() {
         return vbox(children);
     });
 
-    // ---- Глобальные события ----
+    // ---- Глобальные горячие клавиши ----
     renderer = CatchEvent(renderer, [&](Event event) {
-        // Исправление 2: используем Event::Special вместо event.ctrl()
+        // Ctrl+O – открыть браузер
         if (event == Event::Special("ctrl+o")) {
             show_file_browser = true;
             current_dir = ".";
@@ -135,10 +140,12 @@ int main() {
             file_browser_selected = 0;
             return true;
         }
+        // Esc – закрыть браузер без загрузки
         if (event == Event::Escape && show_file_browser) {
             show_file_browser = false;
             return true;
         }
+        // Ctrl+S – сохранить (заглушка)
         if (event == Event::Special("ctrl+s")) {
             if (!filename.empty()) {
                 ofstream ofs(filename);
@@ -151,6 +158,7 @@ int main() {
         return false;
     });
 
+    // ---- Запуск ----
     auto screen = ScreenInteractive::TerminalOutput();
     screen.Loop(renderer);
 
