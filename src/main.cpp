@@ -58,9 +58,10 @@ void load_file(const string& path,
 int main() {
     using namespace ftxui;
 
-    // Состояние
-    vector<string> entries = {"File", "Edit", "View", "Tools", "Help"};
-    int selected = 0;
+    // ---- Состояние ----
+    // Главное меню: теперь есть реальный пункт "Open"
+    vector<string> main_entries = {"Open", "Save", "Exit"};
+    int main_selected = 0;
 
     bool show_file_browser = false;
     string current_dir = ".";
@@ -72,12 +73,11 @@ int main() {
     string filename;
     bool is_modified = false;
 
-    // ---- Главное меню (горизонтальное) ----
-    auto main_menu = Menu(&entries, &selected, MenuOption::Horizontal());
+    // ---- Главное меню (вертикальное, чтобы было понятнее) ----
+    auto main_menu = Menu(&main_entries, &main_selected);
 
     // ---- Файловое меню (браузер) ----
     MenuOption file_menu_option;
-    // Устанавливаем обработчик изменения выбора
     file_menu_option.on_change = [&] {
         if (file_browser_selected < 0 || file_browser_selected >= file_list.size())
             return;
@@ -90,11 +90,11 @@ int main() {
             return;
         }
         string full_path = current_dir + "/" + selected_item;
-        if (selected_item.back() == '/') {  // папка
+        if (selected_item.back() == '/') {
             current_dir = full_path;
             refresh_file_list(current_dir, file_list, current_dir);
             file_browser_selected = 0;
-        } else {  // файл
+        } else {
             load_file(full_path, file_content, saved_content, filename);
             show_file_browser = false;
             is_modified = false;
@@ -104,6 +104,7 @@ int main() {
     auto file_menu = Menu(&file_list, &file_browser_selected, file_menu_option);
 
     // ---- Контейнер всех активных компонентов ----
+    // Важно: порядок определяет, кто получает фокус первым
     auto container = Container::Vertical({main_menu, file_menu});
 
     // ---- Рендерер ----
@@ -114,25 +115,51 @@ int main() {
         string title = "Файл: " + (filename.empty() ? "(не открыт)" : filename);
         if (is_modified) title += " *";
         children.push_back(text(title) | bold | color(Color::Cyan));
+        children.push_back(separator());
 
         if (show_file_browser) {
             children.push_back(text("Текущая папка: " + current_dir) | dim);
             children.push_back(file_menu->Render() | border);
-            children.push_back(text("Enter – выбрать, Esc – отмена") | dim);
+            children.push_back(text("  Enter – выбрать, Esc – отмена  ") | dim | center);
         } else {
             children.push_back(main_menu->Render() | border);
             if (!filename.empty()) {
-                children.push_back(text("Содержимое файла (пока не редактируется)") | dim);
-                children.push_back(text(file_content.substr(0, 200)) | dim);
+                children.push_back(text("Содержимое файла:") | bold);
+                children.push_back(text(file_content.substr(0, 300)) | dim);
             }
+            // Подсказка
+            children.push_back(text("  ↑↓ выбор, Enter – действие, Ctrl+O – открыть, Ctrl+S – сохранить  ") | dim | center);
         }
 
         return vbox(children);
     });
 
-    // ---- Глобальные горячие клавиши ----
+    // ---- Обработка глобальных клавиш и действий главного меню ----
     renderer = CatchEvent(renderer, [&](Event event) {
-        // Ctrl+O – открыть браузер
+        // Если главное меню активно и нажат Enter – обрабатываем выбранный пункт
+        if (!show_file_browser && event == Event::Return) {
+            if (main_selected == 0) { // "Open"
+                show_file_browser = true;
+                current_dir = ".";
+                refresh_file_list(current_dir, file_list, current_dir);
+                file_browser_selected = 0;
+                return true;
+            } else if (main_selected == 1) { // "Save"
+                if (!filename.empty()) {
+                    ofstream ofs(filename);
+                    ofs << file_content;
+                    saved_content = file_content;
+                    is_modified = false;
+                }
+                return true;
+            } else if (main_selected == 2) { // "Exit"
+                // Выход из приложения
+                ScreenInteractive::TerminalOutput().ExitLoop();
+                return true;
+            }
+        }
+
+        // Ctrl+O – открыть браузер (дублируем для удобства)
         if (event == Event::Special("ctrl+o")) {
             show_file_browser = true;
             current_dir = ".";
@@ -140,12 +167,7 @@ int main() {
             file_browser_selected = 0;
             return true;
         }
-        // Esc – закрыть браузер без загрузки
-        if (event == Event::Escape && show_file_browser) {
-            show_file_browser = false;
-            return true;
-        }
-        // Ctrl+S – сохранить (заглушка)
+        // Ctrl+S – сохранить
         if (event == Event::Special("ctrl+s")) {
             if (!filename.empty()) {
                 ofstream ofs(filename);
@@ -153,6 +175,11 @@ int main() {
                 saved_content = file_content;
                 is_modified = false;
             }
+            return true;
+        }
+        // Esc – закрыть браузер без загрузки
+        if (event == Event::Escape && show_file_browser) {
+            show_file_browser = false;
             return true;
         }
         return false;
